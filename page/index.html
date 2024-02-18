@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link type="text/css" rel="stylesheet" href="/page/index.css">
+    <script type="module" src="/page/index.js"></script>
+  </head>
+  <body>
+    <br>
+    <div id="controls" class="controls">
+      <label for="model">Model</label><input id="model" class="control" type="text"></input>
+      <label for="prompt">Prompt</label><textarea id="prompt" class="control"></textarea>
+      <label for="negative">Negative</label><textarea id="negative" class="control"></textarea>
+      <label for="strength">Strength</label><input type="number" id="strength" name="strength" min="0" max="1" step="0.01" class="control"/>
+      <label for="steps">Steps</label><input type="number" id="steps" name="steps" min="1" max="99" value="10", step="1" class="control"/>
+      <label for="width">Width</label><input type="number" id="width" name="width" min="64" max="2048" value="640", step="8" class="control"/>
+      <label for="height">Height</label><input type="number" id="height" name="height" min="64" max="2048" value="480", step="8" class="control"/>
+    </div>
+    <div id="media" class="media">
+      <video id="webcam" class="webcam"></video>
+      <canvas id="canvas" class="canvas" style="display: none"></canvas>
+      <canvas id="output" class="canvas"></canvas>
+    </div>
+    <div id="fps" class="fps"></div>
+  </body>
+</html>

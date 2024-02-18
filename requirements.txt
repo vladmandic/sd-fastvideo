@@ -1,0 +1,10 @@
+accelerate
+diffusers
+fastapi
+numpy
+opencv-python
+Pillow
+rich
+safetensors
+torch
+transformers
