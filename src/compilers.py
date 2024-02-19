@@ -1,8 +1,8 @@
 import time
 import logging
-import torch
 from logger import log
 from options import options
+
 
 deepcache_worker = None
 
@@ -20,12 +20,12 @@ def deepcache(pipe):
         deepcache_worker.disable()
     deepcache_worker = DeepCacheSDHelper(pipe=pipe)
     deepcache_worker.set_params(cache_interval=3, cache_branch_id=0)
-    deepcache_worker.enable()
     log.info(f"compile: task=deepcache config={deepcache_worker.params}")
     return pipe
 
 
 def stablefast(pipe):
+    import torch
     if not options.stablefast:
         return pipe
     try:
@@ -60,6 +60,7 @@ def stablefast(pipe):
 
 
 def inductor(pipe):
+    import torch
     if not options.inductor:
         return pipe
     try:

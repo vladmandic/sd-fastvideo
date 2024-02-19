@@ -6,11 +6,11 @@ const debounceTime = 250;
 const timers = {};
 let ws = null;
 let data = null;
-window.options = {};
+let options = {};
 let webcam = null;
 let image = null;
 let images = [];
-const receiveTimes = [0];
+const receiveTimes = [];
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -41,7 +41,7 @@ async function initWS() {
       for (const [id, data] of Object.entries(json)) {
         const el = document.getElementById(id)
         if (el) el.value = data // update bound dom elements
-        else options[id] = data // update options
+        options[id] = data // update options
       }
     }
   };
@@ -51,12 +51,12 @@ async function initWS() {
 async function initData() {
   data = new WebSocket(`ws://localhost:8000/data/${clientID}`);
   log('ws data', data)
-  let receiveTime = Date.now();
+  let previousReceiveTime = Date.now();
   data.onmessage = (event) => {
     // log('data receive', event.data)
-    receiveTimes.push(Date.now() - receiveTime);
-    receiveTime = Date.now();
-    if (receiveTimes.length > 100) receiveTimes.shift();
+    receiveTimes.push(Date.now() - previousReceiveTime);
+    previousReceiveTime = Date.now();
+    if (receiveTimes.length > 2 * options.batch * options.buffers) receiveTimes.shift();
     if (!image) {
       image = new Image();
       image.onload = () => images.push(image);
@@ -68,16 +68,17 @@ async function initData() {
 }
 
 async function drawImage() {
-  const receiveAvgDelay = receiveTimes.reduce((a, b) => a + b, 100) / (receiveTimes.length);
-  setTimeout(drawImage, receiveAvgDelay);
+  const average = receiveTimes.length > 0 ? receiveTimes.reduce((acc, cur) => acc + cur, 0) / receiveTimes.length : 100;
+  setTimeout(drawImage, average);
   if (images.length === 0) return;
+  console.log(average, receiveTimes)
   image = images.shift();
   const canvas = document.getElementById('output');
   canvas.width = image.width;
   canvas.height = image.height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(image, 0, 0);
-  document.getElementById('fps').innerText = `FPS: ${(1000 / receiveAvgDelay).toFixed(2)}`;
+  document.getElementById('fps').innerText = `FPS: ${(1000 / average).toFixed(1).padStart(4, '0')}`;
 }
 
 async function bindControls() {
@@ -105,7 +106,7 @@ async function main() {
   bindControls()
   while (options?.batch === undefined) await wait(100)
   webcam = new WebCam()
-  webcam.start({ element: 'webcam', canvas: 'canvas', width: options.width, height: options.height })
+  webcam.start({ element: 'input', canvas: 'canvas', width: options.width, height: options.height, 'crop': true })
   drawImage() // start loop
   console.log('options', options)
   initNVML()

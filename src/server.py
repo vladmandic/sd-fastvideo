@@ -51,6 +51,8 @@ def setup_middleware():
             duration = str(round(time.time() - ts, 4))
             res.headers["X-Process-Time"] = duration
             endpoint = req.scope.get('path', 'err')
+            if endpoint == '/nvml':
+                return await call_next(req)
             token = req.cookies.get("access-token") or req.cookies.get("access-token-unsecure")
             log.info('http user={user} code={code} {prot}/{ver} {method} {endpoint} {cli} {duration}'.format( # pylint: disable=consider-using-f-string
                 user = app.tokens.get(token) if hasattr(app, 'tokens') else None,

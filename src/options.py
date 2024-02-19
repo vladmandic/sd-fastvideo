@@ -1,28 +1,37 @@
+from types import SimpleNamespace
 import torch
+
 
 class Options():
     def __init__(self):
+        # general
+        self.log_delay: int = 10
+
+        # generate defaults
         self._model = 'assets/photonLCM_v10.safetensors'
         self._prompt = 'watercolor painting of old man looking at camera'
         self._negative = ''
         self._seed = 424242
-        self.taesd = True
-        self.device = 'cuda'
-        self.batch: int = 8
-        self.width: int = 640
-        self.height: int = 480
-        self.steps: int = 5
+        self.width: int = 512
+        self.height: int = 512
+        self.steps: int = 3
         self.strength: float = 0.5
         self.cfg: float = 0.0
-        self.log_delay: int = 10
+
+        # optimizations
+        self.device: str = 'cuda'
+        self.dtype = torch.float16
+        self.buffers: int = 2 # number of round-robin buffers
+        self.batch: int = 1 # number of items to hold per buffer and process in parallel
+        self.channels_last = False # use cuddn channels last
+        self.inductor = False # compile model using torch inductor
+        self.stablefast = False # compile model using stablefast
+        self.deepcache = False # enable deepcache optimizations
+        self.fuse = True # enable torch kvq fuse optimization
+
+        # internal
         self.prompt_embeds = None
         self.negative_embeds = None
-        self.channels_last = False
-        self.inductor = False
-        self.stablefast = False
-        self.deepcache = False
-        self.fuse = True
-        self.dtype = torch.float16
         self.generator = torch.Generator(self.device).manual_seed(self.seed)
         self.load_config = {
             "low_cpu_mem_usage": True,
@@ -43,18 +52,24 @@ class Options():
 
     def get(self):
         return {
-            "device": self.device,
-            "dtype": str(self.dtype),
-            "batch": self.batch,
             "model": self.model,
             "prompt": self.prompt,
             "negative": self.negative,
-            "strength": self.strength,
+            "width": self.width,
+            "height": self.height,
             "steps": self.steps,
+            "strength": self.strength,
             "cfg": self.cfg,
-            "deepcache": self.deepcache,
-            "stablefast": self.stablefast,
+
+            "buffers": self.buffers,
+            "batch": self.batch,
+            "device": self.device,
+            "dtype": str(self.dtype),
+            "channels_last": self.channels_last,
             "inductor": self.inductor,
+            "stablefast": self.stablefast,
+            "deepcache": self.deepcache,
+            "fuse": self.fuse,
         }
 
     @property
@@ -74,6 +89,7 @@ class Options():
     def prompt(self, value):
         self._prompt = value
         self.prompt_embeds = None
+        self.negative_embeds = None
 
     @property
     def negative(self):
@@ -82,6 +98,7 @@ class Options():
     @negative.setter
     def negative(self, value):
         self._negative = value
+        self.prompt_embeds = None
         self.negative_embeds = None
 
     @property
@@ -93,4 +110,16 @@ class Options():
         self._seed = value
         self.generator = torch.Generator(self.device).manual_seed(self.seed)
 
+
 options = Options()
+stats_dict = {
+    'load': 0,
+    'warmup': 0,
+    'encode': 0,
+    'decode': 0,
+    'generate': 0,
+    'prompt': 0,
+    'network': 0,
+    'frames': 0,
+}
+stats = SimpleNamespace(**stats_dict)

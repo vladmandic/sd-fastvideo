@@ -15,15 +15,14 @@ logging.getLogger("httpx").setLevel(logging.ERROR)
 logging.getLogger("diffusers").setLevel(logging.ERROR)
 logging.getLogger("torch").setLevel(logging.ERROR)
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s | %(name)s | %(levelname)s | %(module)s | %(message)s', handlers=[logging.NullHandler()]) # redirect default logger to null
+warnings.filterwarnings(action="ignore", category=UserWarning)
+warnings.filterwarnings(action="ignore", category=DeprecationWarning)
+warnings.filterwarnings(action="ignore", category=FutureWarning)
 console = Console(log_time=True, log_time_format='%H:%M:%S-%f', theme=Theme({
     "traceback.border": "black",
     "traceback.border.syntax_error": "black",
     "inspect.value.border": "black",
 }))
-
-warnings.filterwarnings(action="ignore", category=UserWarning)
-warnings.filterwarnings(action="ignore", category=DeprecationWarning)
-warnings.filterwarnings(action="ignore", category=FutureWarning)
 
 
 def excepthook(exc_type, exc_value, exc_traceback):

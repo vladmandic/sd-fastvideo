@@ -177,6 +177,8 @@ export class WebCam {
 
   play = async () => {
     if (this.element) await this.element.play();
+    this.element.width = this.width;
+    this.element.height = this.height;
   };
 
   stop = () => {
