@@ -25,9 +25,7 @@
 
 ### Result
 
-Without too many optimizations (more to come) its already running at ~35 FPS using nVidia RTX4090 at 360x640 (1/2 scaled down HD resolution)  
-
-![screenshot](screenshot.jpg)
+Without too many optimizations (more to come) its already running at ~35 FPS using nVidia RTX4090 at 360x640 (1/2 scaled down video HD resolution)  
 
 ## CLI usage
 
@@ -72,7 +70,6 @@ options:
                          ('sample_max_value', 1.0), ('timestep_spacing', 'leading'), ('timestep_scaling', 10.0), ('rescale_betas_zero_snr', False)])
 12:14:39-359392 INFO     warmup: model="assets/photonLCM_v10.safetensors" time=9.414 batch=8
 12:14:39-449658 INFO     ready...
-12:14:39-464986 INFO     {'frames': {'encode': 0, 'proces': 0, 'decode': 0, 'result': 0}, 'queue': {'encode': 0, 'process': 0, 'decode': 0, 'result': 0}, 'time': {'load': '12.095', 'read': '0.000', 'encode': '0.000', 'proces': '0.000', 'decode': '0.000', 'save': '0.000'}, 'gpu': {'memory': 6207.08, 'load': 82, 'state': 'ok'}}
 12:14:39-466074 INFO     thread start: read
 12:14:39-466833 INFO     thread start: save
 12:14:39-467305 INFO     save: fn=/tmp/frames/TheShimmy00000.jpg
@@ -92,5 +89,5 @@ options:
 
 Communication:
 
-- All communication between browser and backend is done using raw websockets real-time
-- Client attempts to maintain constant frame rate based on forward-adjusted server latency  
+- All communication between browser and backend is done using raw websockets in real-time
+- Client maintains constant frame rate based on forward-adjusted server latency
