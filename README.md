@@ -16,16 +16,20 @@
 ### Processing
 
 - Pre-computed prompt embeds (computed on prompt change, not on each generate)
-- LCM scheduler (should use SD15 LCM model)
-- TAESD VAE decode
-- Separate queues and threads for receive/process/decode/upload
+- Optional LCM scheduler (should use SD15 LCM model)
 - Optional StableFast
 - Optional DeepCache
 - Optional Torch compile
 
-### Result
+### Results
 
 Without too many optimizations (more to come) its already running at ~35 FPS using nVidia RTX4090 at 360x640 (1/2 scaled down video HD resolution)  
+
+> done: time=14.316 frames=508 fps=35.485 its=177.427
+
+And with higher step count and simpler scheduler, overall FPS goes down, but damn look at its!
+
+> done: time=37.310 frames=500 fps=13.401 its=268.024
 
 ## CLI usage
 
@@ -33,21 +37,25 @@ Without too many optimizations (more to come) its already running at ~35 FPS usi
 
 ```log
 options:
-  -h, --help           show this help message and exit
-  --input INPUT        input video file
-  --output OUTPUT      output folder
-  --model MODEL        model file
-  --prompt PROMPT      prompt
-  --pipe PIPE          number of processing pipelines
-  --skip SKIP          skip n frames
-  --steps STEPS        scheduler steps
-  --batch BATCH        batch size
-  --scale SCALE        rescale factor
-  --strength STRENGTH  denoise strength
-  --cfg CFG            classifier free guidance
-  --vae                use full vae
-  --debug              debug logging
-```
+  -h, --help            show this help message and exit
+  --input INPUT         input video file
+  --output OUTPUT       output folder
+  --model MODEL         model file
+  --prompt PROMPT       prompt
+  --pipe PIPE           number of processing pipelines
+  --skip SKIP           skip every n frames
+  --steps STEPS         scheduler steps
+  --batch BATCH         batch size
+  --scale SCALE         rescale factor
+  --strength STRENGTH   denoise strength
+  --cfg CFG             classifier free guidance
+  --vae                 use full vae
+  --debug               debug logging
+  --stablefast          use stablefast
+  --deepcache           use deepcache
+  --inductor            use torch inductor
+  --sampler {lcm,deis,euler,dpm}
+  ```
 
 *Note*: For any options not exposed by cli args, modify `engine/options.py` as necessary  
 For example, compile modes, torch dtype, etc.
@@ -94,3 +102,7 @@ Communication:
 
 - All communication between browser and backend is done using raw websockets in real-time
 - Client maintains constant frame rate based on forward-adjusted server latency
+
+## Issues
+
+- VAE decode in separate process can cause decode corruption

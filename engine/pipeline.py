@@ -16,7 +16,15 @@ def load(options):
     log.info(f'loading: model="{options.model}" options={options.load_config}') # pylint: disable=protected-access
     pipe = diffusers.StableDiffusionImg2ImgPipeline.from_single_file(options.model, **options.load_config)
     pipe.set_progress_bar_config(disable=True)
-    pipe.scheduler = diffusers.LCMScheduler.from_config(options.scheduler_config)
+    if options.sampler == 'euler':
+        cls = diffusers.EulerAncestralDiscreteScheduler
+    elif options.sampler == 'lcm':
+        cls = diffusers.LCMScheduler
+    elif options.sampler == 'deis':
+        cls = diffusers.DEISMultistepScheduler
+    elif options.sampler == 'dpm':
+        cls = diffusers.DPMSolverMultistepScheduler
+    pipe.scheduler = cls.from_config(options.scheduler_config)
     if options.channels_last:
         pipe.to(memory_format=torch.channels_last)
     pipe.to(options.device, options.dtype)
@@ -26,9 +34,9 @@ def load(options):
     if options.fuse:
         pipe.fuse_qkv_projections()
     import compilers
-    pipe = compilers.stablefast(pipe)
-    pipe = compilers.deepcache(pipe)
-    pipe = compilers.inductor(pipe)
+    pipe = compilers.stablefast(pipe, options)
+    pipe = compilers.deepcache(pipe, options)
+    pipe = compilers.inductor(pipe, options)
     import numpy as np
     _res = pipe(
         prompt=options.batch * ["dummy prompt"],
@@ -84,5 +92,7 @@ def process(in_queue, out_queue, elapsed, load_time, frames, options):
         if res is not None and res.images is not None:
             frames.value += len(res.images)
             for image in res.images:
+                if isinstance(image, torch.Tensor):
+                    image = image.detach().clone()
                 out_queue.put((image))
         elapsed.value += time.time() - t0

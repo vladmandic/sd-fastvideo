@@ -1,13 +1,12 @@
 import time
 import logging
 from logger import log
-from options import options
 
 
 deepcache_worker = None
 
 
-def deepcache(pipe):
+def deepcache(pipe, options):
     global deepcache_worker # pylint: disable=global-statement
     if not options.deepcache:
         return pipe
@@ -24,7 +23,7 @@ def deepcache(pipe):
     return pipe
 
 
-def stablefast(pipe):
+def stablefast(pipe, options):
     import torch
     if not options.stablefast:
         return pipe
@@ -59,7 +58,7 @@ def stablefast(pipe):
     return pipe
 
 
-def inductor(pipe):
+def inductor(pipe, options):
     import torch
     if not options.inductor:
         return pipe

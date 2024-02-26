@@ -9,6 +9,7 @@ class Options():
 
         # generate defaults
         self.model = 'assets/photonLCM_v10.safetensors'
+        self.sampler = 'lcm'
         self._prompt = 'sexy girl dancing'
         self._negative = ''
         self._seed = 424242
@@ -21,14 +22,14 @@ class Options():
         # optimizations
         self.vae = False
         self.device: str = 'cuda'
-        self.dtype = torch.float16
+        self.dtype = torch.bfloat16
         self.pipelines: int = 1 # number of processing instances to start
         self.batch: int = 1 # number of items to hold per buffer and process in parallel
-        self.channels_last = False # use cuddn channels last
+        self.channels_last = True # use cuddn channels last
         self.inductor = False # compile model using torch inductor
         self.stablefast = False # compile model using stablefast
         self.deepcache = False # enable deepcache optimizations
-        self.fuse = False # enable torch kvq fuse optimization
+        self.fuse = True # enable torch kvq fuse optimization
 
         # internal
         self.prompt_embeds = None
@@ -55,7 +56,6 @@ class Options():
             'beta_end': 0.012,
             'beta_schedule': 'scaled_linear',
             'trained_betas': None,
-            'original_inference_steps': 50,
             'clip_sample': False,
             'clip_sample_range': 1.0,
             'set_alpha_to_one': False,
@@ -65,8 +65,9 @@ class Options():
             'dynamic_thresholding_ratio': 0.995,
             'sample_max_value': 1.0,
             'timestep_spacing': 'leading',
-            'timestep_scaling': 10.0,
             'rescale_betas_zero_snr': False,
+            # 'timestep_scaling': 10.0,
+            # 'original_inference_steps': 50,
         }
 
     def get(self):

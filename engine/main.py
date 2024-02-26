@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--model', type=str, required=False, help="model file")
     parser.add_argument('--prompt', type=str, required=False, help="prompt")
     parser.add_argument('--pipe', type=int, default=1, help="number of processing pipelines")
-    parser.add_argument('--skip', type=int, default=0, help="skip n frames")
+    parser.add_argument('--skip', type=int, default=0, help="skip every n frames")
     parser.add_argument('--steps', type=int, default=5, help="scheduler steps")
     parser.add_argument('--batch', type=int, default=1, help="batch size")
     parser.add_argument('--scale', type=float, default=1.0, help="rescale factor")
@@ -36,10 +36,15 @@ def parse_args():
     parser.add_argument('--cfg', type=float, default=6.0, help="classifier free guidance")
     parser.add_argument("--vae", action="store_true", help="use full vae")
     parser.add_argument("--debug", action="store_true", help="debug logging")
+    parser.add_argument("--stablefast", action="store_true", help="use stablefast")
+    parser.add_argument("--deepcache", action="store_true", help="use deepcache")
+    parser.add_argument("--inductor", action="store_true", help="use torch inductor")
+    parser.add_argument('--sampler', type=str, required=False, help="sampler", choices=['lcm', 'deis', 'euler', 'dpm'])
     args = parser.parse_args()
     # set options
     options.level = 'DEBUG' if args.debug else 'INFO'
     options.model = args.model or options.model
+    options.sampler = args.sampler or options.sampler
     options._prompt = args.prompt or options._prompt # pylint: disable=protected-access
     options.pipelines = args.pipe
     options.vae = args.vae
@@ -48,6 +53,9 @@ def parse_args():
     options.scale = args.scale
     options.cfg = args.cfg
     options.steps = args.steps
+    options.stablefast = args.stablefast
+    options.deepcache = args.deepcache
+    options.inductor = args.inductor
 
 
 def get_stats():

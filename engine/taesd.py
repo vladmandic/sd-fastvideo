@@ -98,7 +98,7 @@ def decoder(in_queue, out_queue, elapsed, frames, options): # batch decodes proc
             with torch.no_grad():
                 decoded = 255 * vae.decoder(batch)
             tensors = torch.split(decoded, 1, dim=0)
-            images = [t.squeeze(0).permute(1, 2, 0).detach().cpu() for t in tensors]
+            images = [t.to(torch.float16).squeeze(0).permute(1, 2, 0).detach().cpu() for t in tensors]
             images = [t.numpy().astype(np.uint8) for t in images]
             decoder_calls += 1
             log.debug(f'decode  i={decoder_calls} in={len(latents)} out={len(images)} time={time.time() - t0}')
