@@ -1,21 +1,23 @@
-import base64
+import time
 import torch
 import torch.nn as nn
 import numpy as np
-import cv2
-from options import options
 from logger import log
 
 
+encoder_calls = 0
+decoder_calls = 0
 vae = None
 
 
 def conv(n_in, n_out, **kwargs):
     return nn.Conv2d(n_in, n_out, 3, padding=1, **kwargs)
 
+
 class Clamp(nn.Module):
     def forward(self, x):
         return torch.tanh(x / 3) * 3
+
 
 class Block(nn.Module):
     def __init__(self, n_in, n_out):
@@ -26,6 +28,7 @@ class Block(nn.Module):
     def forward(self, x):
         return self.fuse(self.conv(x) + self.skip(x))
 
+
 def Encoder():
     return nn.Sequential(
         conv(3, 64), Block(64, 64),
@@ -34,6 +37,7 @@ def Encoder():
         conv(64, 64, stride=2, bias=False), Block(64, 64), Block(64, 64), Block(64, 64),
         conv(64, 4),
     )
+
 
 def Decoder():
     return nn.Sequential(
@@ -44,12 +48,12 @@ def Decoder():
         Block(64, 64), conv(64, 3),
     )
 
+
 class TAESD(nn.Module): # pylint: disable=abstract-method
     latent_magnitude = 3
     latent_shift = 0.5
 
     def __init__(self, encoder_path="taesd_encoder.pth", decoder_path="taesd_decoder.pth"):
-        """Initialize pretrained TAESD on the given device from the given checkpoints."""
         super().__init__()
         self.encoder = Encoder()
         self.decoder = Decoder()
@@ -59,17 +63,15 @@ class TAESD(nn.Module): # pylint: disable=abstract-method
             self.decoder.load_state_dict(torch.load(decoder_path, map_location="cpu"))
 
     @staticmethod
-    def scale_latents(x):
-        """raw latents -> [0, 1]"""
+    def scale_latents(x): # """raw latents -> [0, 1]"""
         return x.div(2 * TAESD.latent_magnitude).add(TAESD.latent_shift).clamp(0, 1)
 
     @staticmethod
-    def unscale_latents(x):
-        """[0, 1] -> raw latents"""
+    def unscale_latents(x): # """[0, 1] -> raw latents"""
         return x.sub(TAESD.latent_shift).mul(2 * TAESD.latent_magnitude)
 
 
-def load(what: str):
+def load(what: str, options):
     global vae # pylint: disable=global-statement
     log.info(f'vae load: type={what} device={options.device} dtype={options.dtype}')
     if what == 'encoder':
@@ -81,33 +83,52 @@ def load(what: str):
     return vae
 
 
-@torch.no_grad()
-def decode(latents):
-    if vae is None:
-        load('decoder')
-    try:
-        decoded = 255 * vae.decoder(latents)
-        tensors = torch.split(decoded, 1, dim=0)
-        images = [t.squeeze(0).permute(1, 2, 0).detach().cpu() for t in tensors]
-        images = [t.numpy().astype(np.uint8) for t in images]
-    except Exception as e:
-        log.error(f'decode: latents={latents} {e}')
-        images = []
-    return images
+def decoder(in_queue, out_queue, elapsed, frames, options): # batch decodes processed images placed in queue
+    global decoder_calls # pylint: disable=global-statement
+    log.setLevel(options.level)
+    import env
+    env.set_environment()
+    load('decoder', options)
+    latents = []
+    while True:
+        latents.append(in_queue.get())
+        if len(latents) == options.batch:
+            t0 = time.time()
+            batch = torch.stack(latents).to(options.device, options.dtype)
+            with torch.no_grad():
+                decoded = 255 * vae.decoder(batch)
+            tensors = torch.split(decoded, 1, dim=0)
+            images = [t.squeeze(0).permute(1, 2, 0).detach().cpu() for t in tensors]
+            images = [t.numpy().astype(np.uint8) for t in images]
+            decoder_calls += 1
+            log.debug(f'decode  i={decoder_calls} in={len(latents)} out={len(images)} time={time.time() - t0}')
+            frames.value += len(images)
+            for image in images:
+                out_queue.put((image))
+            elapsed.value += time.time() - t0
+            latents.clear()
 
-@torch.no_grad()
-def encode(images):
-    if vae is None:
-        load('encoder')
-    tensors = []
-    for data in images:
-        b64 = data.decode('utf-8')
-        b64 = base64.b64decode(b64.split(",")[1]) # Remove the "data:image/jpeg;base64," prefix
-        image = np.frombuffer(b64, dtype=np.uint8)
-        image = cv2.imdecode(image, cv2.IMREAD_UNCHANGED)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        tensor = torch.from_numpy(image).permute(2, 0, 1) # h,w,c=>c,h,w
-        tensors.append(tensor)
-    batch = torch.stack(tensors).to(options.device, options.dtype) / 255.0
-    latents = vae.encoder(batch)
-    return latents
+
+def encoder(in_queue, out_queue, elapsed, frames, options): # batch encodes images for processing placed in queue
+    global encoder_calls # pylint: disable=global-statement
+    log.setLevel(options.level)
+    import env
+    env.set_environment()
+    load('encoder', options)
+    images = []
+    while True:
+        images.append(in_queue.get())
+        if len(images) == options.batch:
+            t0 = time.time()
+            tensors = [torch.from_numpy(i).permute(2, 0, 1) for i in images] # h,w,c=>c,h,w
+            batch = torch.stack(tensors).to(options.device, options.dtype) / 255.0
+            with torch.no_grad():
+                latents = vae.encoder(batch)
+            if latents is None:
+                continue
+            encoder_calls += 1
+            log.debug(f'encode  i={encoder_calls} in={len(images)} out={len(latents)} time={time.time() - t0}')
+            frames.value += len(images)
+            out_queue.put((latents))
+            elapsed.value += time.time() - t0
+            images.clear()

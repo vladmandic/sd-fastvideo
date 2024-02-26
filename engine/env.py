@@ -1,9 +1,5 @@
-import os
-from logger import log
-
-
 def set_environment():
-    log.debug('env setup')
+    import os
     os.environ.setdefault('ACCELERATE', 'True')
     os.environ.setdefault('ATTN_PRECISION', 'fp16')
     os.environ.setdefault('CUDA_AUTO_BOOST', '1')
@@ -27,6 +23,7 @@ def set_environment():
     os.environ.setdefault('TORCH_CUDNN_V8_API_ENABLED', '1')
     os.environ.setdefault('USE_TORCH', '1')
     os.environ.setdefault('UVICORN_TIMEOUT_KEEP_ALIVE', '60')
+    os.environ.setdefault('PYTHONWARNINGS', 'ignore')
 
     import torch
     torch.backends.cuda.matmul.allow_tf32 = True

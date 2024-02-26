@@ -1,6 +1,19 @@
 # Fast WebCam and Video processing using Stable Diffusion
 
-Optimizations:
+## Highlights
+
+- CLI usage and Web client
+
+### Optimizations
+
+- Torch multiprocessing:
+  - separate VAE encode and decode processes (if TAESD is enabled)
+  - separate pipeline process (configurable number)
+- Python multithreading:
+  - separate frame read and frame write threads
+- Queues that link read->encode->process->decode->write
+
+### Processing
 
 - Pre-computed prompt embeds (computed on prompt change, not on each generate)
 - LCM scheduler (should use SD15 LCM model)
@@ -10,64 +23,74 @@ Optimizations:
 - Optional DeepCache
 - Optional Torch compile
 
-## Result
+### Result
 
-Without too many optimizations (more to come) its already running at ~10 FPS using nVidia RTX4090 at 640x480 resolution  
+Without too many optimizations (more to come) its already running at ~35 FPS using nVidia RTX4090 at 360x640 (1/2 scaled down HD resolution)  
 
 ![screenshot](screenshot.jpg)
 
-## Overview
+## CLI usage
+
+> python engine/main.py --help
+
+```log
+options:
+  -h, --help           show this help message and exit
+  --input INPUT        input video file
+  --output OUTPUT      output folder
+  --model MODEL        model file
+  --prompt PROMPT      prompt
+  --pipe PIPE          number of processing pipelines
+  --skip SKIP          skip n frames
+  --steps STEPS        scheduler steps
+  --batch BATCH        batch size
+  --scale SCALE        rescale factor
+  --strength STRENGTH  denoise strength
+  --cfg CFG            classifier free guidance
+  --vae                use full vae
+  --debug              debug logging
+```
+
+### Example
+
+> python engine/main.py --scale 0.5 --skip 0 --batch 8 --pipe 1 --input TheShimmy.mp4 --output /tmp/frames
+
+```json
+12:14:25-750151 INFO     environment setup complete
+12:14:25-841154 INFO     packages: torch=2.2.0+cu121 diffusers=0.27.0.dev0 mp=file_descriptor
+12:14:25-962239 INFO     gpu: {'name': 'NVIDIA GeForce RTX 4090', 'version': {'cuda': 12040, 'driver': '551.52', 'vbios': '95.02.3c.40.b8', 'rom': 'G002.0000.00.03', 'capabilities': (8, 9)}, 'pci': {'link': 4, 'width': 16, 'busid': '00000000:01:00.0', 'deviceid': 646189278}, 'memory': {'total': 24564.0, 'free': 22768.81, 'used': 1795.19}, 'clock': {'gpu': [210, 3375], 'sm': [210, 3375], 'memory': [405, 10501]}, 'load': {'gpu': 8,
+                         'memory': 14, 'temp': 50, 'fan': 31}, 'power': [29.34, 405.0], 'state': 'gpu idle'}
+12:14:25-990180 INFO     input video: path=TheShimmy.mp4 frames=509 fps=60 size=720x1280 codec=h264
+12:14:26-603977 INFO     options: {'level': 'INFO', 'model': 'assets/photonLCM_v10.safetensors', 'prompt': 'sexy girl dancing', 'negative': '', 'width': 360.0, 'height': 640.0, 'steps': 5, 'strength': 0.2, 'cfg': 6.0, 'batch': 8, 'device': 'cuda', 'dtype': 'torch.float16', 'channels_last': False, 'inductor': False, 'stablefast': False, 'deepcache': False, 'fuse': False}
+12:14:26-605654 INFO     vae: taesd multiprocess
+12:14:27-269564 INFO     vae load: type=encoder device=cuda dtype=torch.float16
+12:14:27-285394 INFO     vae load: type=decoder device=cuda dtype=torch.float16
+12:14:27-841512 INFO     loading: model="assets/photonLCM_v10.safetensors" options={'low_cpu_mem_usage': True, 'torch_dtype': torch.float16, 'safety_checker': None, 'requires_safety_checker': False, 'load_safety_checker': False, 'load_connected_pipeline': True, 'use_safetensors': True, 'extract_ema': True, 'config_files': {'v1': 'configs/v1-inference.yaml', 'v2': 'configs/v2-inference-768-v.yaml', 'xl': 'configs/sd_xl_base.yaml',
+                         'xl_refiner': 'configs/sd_xl_refiner.yaml'}}
+12:14:29-945010 INFO     model: file="assets/photonLCM_v10.safetensors" class=StableDiffusionImg2ImgPipeline device=cuda time=2.103
+12:14:29-946444 INFO     sampler: class=LCMScheduler config=FrozenDict([('num_train_timesteps', 1000), ('beta_start', 0.00085), ('beta_end', 0.012), ('beta_schedule', 'scaled_linear'), ('trained_betas', None), ('original_inference_steps', 50), ('clip_sample', False), ('clip_sample_range', 1.0), ('set_alpha_to_one', False), ('steps_offset', 1), ('prediction_type', 'epsilon'), ('thresholding', False), ('dynamic_thresholding_ratio', 0.995),
+                         ('sample_max_value', 1.0), ('timestep_spacing', 'leading'), ('timestep_scaling', 10.0), ('rescale_betas_zero_snr', False)])
+12:14:39-359392 INFO     warmup: model="assets/photonLCM_v10.safetensors" time=9.414 batch=8
+12:14:39-449658 INFO     ready...
+12:14:39-464986 INFO     {'frames': {'encode': 0, 'proces': 0, 'decode': 0, 'result': 0}, 'queue': {'encode': 0, 'process': 0, 'decode': 0, 'result': 0}, 'time': {'load': '12.095', 'read': '0.000', 'encode': '0.000', 'proces': '0.000', 'decode': '0.000', 'save': '0.000'}, 'gpu': {'memory': 6207.08, 'load': 82, 'state': 'ok'}}
+12:14:39-466074 INFO     thread start: read
+12:14:39-466833 INFO     thread start: save
+12:14:39-467305 INFO     save: fn=/tmp/frames/TheShimmy00000.jpg
+12:14:39-905348 INFO     thread done: read time=0.418
+...
+12:14:46-621771 INFO     {'frames': {'encode': 504, 'proces': 160, 'decode': 160, 'result': 160}, 'queue': {'encode': 0, 'process': 42, 'decode': 0, 'result': 0}, 'time': {'load': '12.095', 'read': '0.418', 'encode': '3.602', 'proces': '6.371', 'decode': '2.342', 'save': '0.003'}, 'gpu': {'memory': 9442.89, 'load': 98, 'state': 'sw power cap'}}
+...
+12:14:53-920597 INFO     terminate: encode
+12:14:53-921165 INFO     terminate: decode
+12:14:53-921675 INFO     terminate: process=1
+12:14:53-922218 INFO     done: time=14.455 frames=488 fps=33.761 its=168.804
+```
+
+## Web client
+
+*TODO*
 
 Communication:
 
 - All communication between browser and backend is done using raw websockets real-time
-
-Processing:
-
-- Server maintains two buffers, each n frames deep  
-- Frames are received from client and stored in buffer until its full and then it switches the buffer  
-  Backend throttles the client to match buffers in full state by sending ready-to-receive messages  
-- When buffer is full it is processed by the model as a batch job in a separate thread  
-- When processing is done, it stores data in decode queue so it can immediately start processing next buffer  
-- VAE decodes all data in decode queue and places it in send queue  
-- Server sends any data in output buffer to client asynchronously  
-
-Client:
-
-- Attempts to maintain constant frame rate based on forward-adjusted server latency  
-
-## Run
-
-- edit `src/options.py` for default options
-- start using `accelerate launch src/main.py` or `python src/main.py`
-
-```log
-15:07:29-504314 INFO     /home/vlado/dev/sd-fastvideo/src/main.py
-15:07:29-506185 DEBUG    env setup
-15:07:29-506786 INFO     packages: torch=2.2.0+cu121 diffusers=0.26.3
-15:07:29-507657 INFO     options: {'device': 'cuda', 'dtype': 'torch.float16', 'batch': 8, 'model': 'assets/photonLCM_v10.safetensors', 'prompt': 'watercolor painting of old man looking at camera', 'negative': '', 'strength': 0.5, 'steps': 5, 'cfg': 0.0, 'deepcache': False, 'stablefast': False, 'inductor': False}
-15:07:29-508541 DEBUG    fastapi args: {...}
-15:07:29-510256 DEBUG    init middleware
-15:07:29-511226 DEBUG    uvicorn args: {..}
-15:07:29-513875 INFO     uvicorn start: http://127.0.0.1:8000
-15:07:29-621352 INFO     gpu: {'name': 'NVIDIA GeForce RTX 4090', 'version': {'cuda': 12040, 'driver': '551.52', 'vbios': '95.02.3c.40.b8', 'rom': 'G002.0000.00.03', 'capabilities': (8, 9)}, 'pci': {'link': 4, 'width': 16, 'busid': '00000000:01:00.0', 'deviceid': 646189278}, 'memory': {'total': 24564.0, 'free': 22090.35, 'used': 2473.65},
-                         'clock': {'gpu': [210, 3165], 'sm': [210, 3165], 'memory': [405, 10501]}, 'load': {'gpu': 1, 'memory': 35, 'temp': 49, 'fan': 0}, 'power': [30.96, 405.0], 'state': 'gpu idle'}
-15:07:29-622601 INFO     loading: model="assets/photonLCM_v10.safetensors" options={...}}
-15:07:33-198810 INFO     loaded: model="assets/photonLCM_v10.safetensors" class=StableDiffusionImg2ImgPipeline sampler=LCMScheduler device=cuda time=3.576
-15:07:44-384946 INFO     warmup: model="assets/photonLCM_v10.safetensors" time=11.186
-15:07:44-385690 INFO     ready...
-15:07:50-387542 DEBUG    server: alive=True requests=0 uptime=21 clients=0 frames=0 queue=0/0
-15:09:11-416624 INFO     http user=None code=302 http/1.1 GET / 127.0.0.1 0.0004
-15:09:11-778678 DEBUG    ws connect: client=127.0.0.1 agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
-15:09:15-088734 INFO     vae load
-15:09:15-635224 INFO     process: time=0.546 images=8 its=36.614 used=4.91 total=23.99
-```
-
-## TODO
-
-- improve requirements.txt
-- dynamic optimizations
-- json config
-- manual init_latents
-- ui
-- video processing
+- Client attempts to maintain constant frame rate based on forward-adjusted server latency  

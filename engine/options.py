@@ -1,38 +1,38 @@
-from types import SimpleNamespace
 import torch
 
 
 class Options():
     def __init__(self):
         # general
-        self.log_delay: int = 10
+        self.level = 'DEBUG'
+        self.scale = 0.5
 
         # generate defaults
-        self._model = 'assets/photonLCM_v10.safetensors'
-        self._prompt = 'watercolor painting of old man looking at camera'
+        self.model = 'assets/photonLCM_v10.safetensors'
+        self._prompt = 'sexy girl dancing'
         self._negative = ''
         self._seed = 424242
         self.width: int = 512
         self.height: int = 512
-        self.steps: int = 3
-        self.strength: float = 0.5
-        self.cfg: float = 0.0
+        self.steps: int = 5
+        self.strength: float = 0.2
+        self.cfg: float = 4.0
 
         # optimizations
+        self.vae = False
         self.device: str = 'cuda'
         self.dtype = torch.float16
-        self.buffers: int = 2 # number of round-robin buffers
+        self.pipelines: int = 1 # number of processing instances to start
         self.batch: int = 1 # number of items to hold per buffer and process in parallel
         self.channels_last = False # use cuddn channels last
         self.inductor = False # compile model using torch inductor
         self.stablefast = False # compile model using stablefast
         self.deepcache = False # enable deepcache optimizations
-        self.fuse = True # enable torch kvq fuse optimization
+        self.fuse = False # enable torch kvq fuse optimization
 
         # internal
         self.prompt_embeds = None
         self.negative_embeds = None
-        self.generator = torch.Generator(self.device).manual_seed(self.seed)
         self.load_config = {
             "low_cpu_mem_usage": True,
             "torch_dtype": self.dtype,
@@ -49,9 +49,29 @@ class Options():
                 'xl_refiner': 'configs/sd_xl_refiner.yaml',
             }
         }
+        self.scheduler_config = {
+            'num_train_timesteps': 1000,
+            'beta_start': 0.00085,
+            'beta_end': 0.012,
+            'beta_schedule': 'scaled_linear',
+            'trained_betas': None,
+            'original_inference_steps': 50,
+            'clip_sample': False,
+            'clip_sample_range': 1.0,
+            'set_alpha_to_one': False,
+            'steps_offset': 1,
+            'prediction_type': 'epsilon',
+            'thresholding': False,
+            'dynamic_thresholding_ratio': 0.995,
+            'sample_max_value': 1.0,
+            'timestep_spacing': 'leading',
+            'timestep_scaling': 10.0,
+            'rescale_betas_zero_snr': False,
+        }
 
     def get(self):
         return {
+            "level": self.level,
             "model": self.model,
             "prompt": self.prompt,
             "negative": self.negative,
@@ -60,8 +80,6 @@ class Options():
             "steps": self.steps,
             "strength": self.strength,
             "cfg": self.cfg,
-
-            "buffers": self.buffers,
             "batch": self.batch,
             "device": self.device,
             "dtype": str(self.dtype),
@@ -71,15 +89,6 @@ class Options():
             "deepcache": self.deepcache,
             "fuse": self.fuse,
         }
-
-    @property
-    def model(self):
-        return self._model
-
-    @model.setter
-    def model(self, value):
-        import engine
-        engine.load(value)
 
     @property
     def prompt(self):
@@ -112,14 +121,3 @@ class Options():
 
 
 options = Options()
-stats_dict = {
-    'load': 0,
-    'warmup': 0,
-    'encode': 0,
-    'decode': 0,
-    'generate': 0,
-    'prompt': 0,
-    'network': 0,
-    'frames': 0,
-}
-stats = SimpleNamespace(**stats_dict)

@@ -10,6 +10,8 @@ let options = {};
 let webcam = null;
 let image = null;
 let images = [];
+let tmpCanvas = null;
+let tmpCtx = null;
 const receiveTimes = [];
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -20,12 +22,25 @@ window.log = (...msg) => {
   if (msg) console.log(ts, ...msg); // eslint-disable-line no-console
 }
 
+const snapImage = (el) => {
+  if (!el) return undefined;
+  if (!tmpCanvas) tmpCanvas = document.createElement('canvas');
+  if (el.videoWidth !== tmpCanvas.width || el.videoHeight !== tmpCanvas.height) {
+    tmpCanvas.width = el.videoWidth;
+    tmpCanvas.height = el.videoHeight; 
+  };
+  if (!tmpCtx) tmpCtx = tmpCanvas.getContext('2d', { willReadFrequently: true})
+  tmpCtx.drawImage(el, 0, 0, el.width, el.height);
+  return tmpCanvas.toDataURL('image/jpeg', 0.8);
+}
+
 async function sendImage() {
   if (data.readyState !== 1) await wait(250);
-  if (!webcam) await wait(250)
-  if (webcam.paused) return;
   if (!data) initData()
-  const jpeg = webcam.snap()
+  const input = document.getElementById('input')
+  if (input.paused) return;
+  const jpeg = snapImage(input)
+  if (!jpeg) return;
   const encoded = new TextEncoder().encode(jpeg);
   if (data.readyState === 1) data.send(encoded)
 }
@@ -35,7 +50,6 @@ async function initWS() {
   log('ws init', ws)
   ws.onmessage = (event) => {
     const json = JSON.parse(event.data)
-    // log('ws receive', json)
     if (json.ready) sendImage() // send new image on ready
     else {
       for (const [id, data] of Object.entries(json)) {
@@ -71,7 +85,6 @@ async function drawImage() {
   const average = receiveTimes.length > 0 ? receiveTimes.reduce((acc, cur) => acc + cur, 0) / receiveTimes.length : 100;
   setTimeout(drawImage, average);
   if (images.length === 0) return;
-  console.log(average, receiveTimes)
   image = images.shift();
   const canvas = document.getElementById('output');
   canvas.width = image.width;
@@ -100,15 +113,46 @@ async function bindControls() {
   }
 }
 
+async function uploadVideo(evt) {
+  const input = document.getElementById('input')
+  const file = evt.target.files[0]; // 1st member in files-collection
+  const fileURL = window.URL.createObjectURL(file);
+  input.src=fileURL;
+  log('video', fileURL)
+  input.onloadeddata = () => {
+    log('video loaded', input.videoWidth, input.videoHeight)
+    document.getElementById('width').value = input.videoWidth
+    document.getElementById('height').value = input.videoHeight
+    data = { width: input.videoWidth, height: input.videoHeight }
+    ws.send(JSON.stringify({ id: 'width', data: input.videoWidth }))
+    ws.send(JSON.stringify({ id: 'height', data: input.videoHeight }))
+  }
+  input.load();
+  input.play();
+}
+
+async function bindToolbar() {
+  const input = document.getElementById('input')
+  const el = {
+    video: document.getElementById('select-video'),
+    webcam: document.getElementById('btn-webcam'),
+    pause: document.getElementById('btn-pause'),
+  }
+  log('toolbar', el)
+  el.webcam.onclick = () => webcam.start({ element: 'input', canvas: 'canvas', width: options.width, height: options.height, 'crop': true });
+  el.pause.onclick = () => input.paused ? input.play() : input.pause();
+  el.video.onchange = uploadVideo;
+}
+
 async function main() {
   initWS()
   initData()
   bindControls()
+  bindToolbar()
   while (options?.batch === undefined) await wait(100)
   webcam = new WebCam()
-  webcam.start({ element: 'input', canvas: 'canvas', width: options.width, height: options.height, 'crop': true })
   drawImage() // start loop
-  console.log('options', options)
+  log('options', options)
   initNVML()
 }
 

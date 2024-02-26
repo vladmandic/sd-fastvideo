@@ -185,15 +185,4 @@ export class WebCam {
     if (this.config.debug) log('webcam', 'stop');
     if (this.track) this.track.stop();
   };
-
-  snap = () => {
-    if (!this.canvas) this.canvas = document.createElement('canvas');
-    if (this.width !== this.canvas.width || this.height !== this.canvas.height) {
-      this.canvas.width = this.width;
-      this.canvas.height = this.height; 
-    };
-    if (!this.ctx) this.ctx = this.canvas.getContext('2d', { willReadFrequently: true})
-    this.ctx.drawImage(this.element, 0, 0, this.width, this.height);
-    return this.canvas.toDataURL('image/jpeg', 0.8);
-  }
 }

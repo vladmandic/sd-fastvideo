@@ -1,6 +1,7 @@
 @font-face { font-family: 'NotoSans'; font-display: swap; font-style: normal; font-weight: 100; src: local('NotoSans'), url('/assets/notosans-nerdfont-regular.ttf') }
 html { font-family: 'NotoSans'; font-size: 14px; }
 body { margin: 0; background: black; color: white; overflow: hidden; width: 100vw; height: 100vh; line-height: 1.5rem; }
+span { display: flex; }
 label { vertical-align: baseline; padding: 0.5em 0 0 0.5em; min-width: 80px; }
 input, textarea { font-family: 'NotoSans'; font-size: 14px; background: black; border: none; border-bottom: 1px solid darkmagenta; width: 400px; color: beige; margin: 0.5em }
 input[type="number"] { width: 80px; text-align: right; }
@@ -8,3 +9,6 @@ input[type="number"] { width: 80px; text-align: right; }
 .media { display: flex; flex-direction: row; place-content: center; position: absolute; right: 0; }
 .nvml { position: absolute; bottom: 0; font-size: 0.8em; line-height: 1em; color: darkmagenta; padding: 0.5em; font-family: monospace; }
 .fps { width: 6em; height: 2em; color: darkmagenta; font-size: 1.5em; font-weight: 800; position: absolute; bottom: 0; right: 0; }
+.toolbar { display: flex; margin: 1em; justify-content: space-evenly; }
+button { font-family: 'NotoSans'; background-color: darkmagenta; border: none; color: beige; width: 6em; height: 4em; }
+button:hover { background-color: gray; }
