@@ -49,6 +49,9 @@ options:
   --debug              debug logging
 ```
 
+*Note*: For any options not exposed by cli args, modify `engine/options.py` as necessary  
+For example, compile modes, torch dtype, etc.
+
 ### Example
 
 > python engine/main.py --scale 0.5 --skip 0 --batch 8 --pipe 1 --input TheShimmy.mp4 --output /tmp/frames
