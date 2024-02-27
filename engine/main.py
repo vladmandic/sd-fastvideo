@@ -30,9 +30,10 @@ def parse_args():
     parser.add_argument('--steps', type=int, default=5, help="scheduler steps")
     parser.add_argument('--batch', type=int, default=1, help="batch size")
     parser.add_argument('--scale', type=float, default=1.0, help="rescale factor")
-    parser.add_argument('--strength', type=float, default=0.2, help="denoise strength")
+    parser.add_argument('--strength', type=float, default=0.5, help="denoise strength")
     parser.add_argument('--cfg', type=float, default=6.0, help="classifier free guidance")
-    parser.add_argument("--vae", action="store_true", help="use full vae")
+    parser.add_argument('--vae', type=str, required=False, help="vae file")
+    parser.add_argument("--taesd", action="store_true", help="use taesd vae")
     parser.add_argument("--debug", action="store_true", help="debug logging")
     parser.add_argument("--stablefast", action="store_true", help="use stablefast")
     parser.add_argument("--deepcache", action="store_true", help="use deepcache")
@@ -46,6 +47,7 @@ def parse_args():
     options._prompt = args.prompt or options._prompt # pylint: disable=protected-access
     options.pipelines = args.pipe
     options.vae = args.vae
+    options.taesd = args.taesd
     options.batch = args.batch
     options.strength = args.strength
     options.scale = args.scale
@@ -91,8 +93,6 @@ def get_stats():
     log.info(stats)
 
 
-
-
 def setup_context(context):
     import torch.multiprocessing as mp # pylint: disable=redefined-outer-name
     m = context.Manager()
@@ -110,9 +110,26 @@ def setup_context(context):
     queue.result = mp.Queue()
 
 
-if __name__ == "__main__":
-    # init
-    parse_args()
+def terminate():
+    if processes.encode is not None and processes.encode.is_alive():
+        log.info('terminate: encode')
+        processes.encode.terminate()
+    if processes.decode is not None and processes.decode.is_alive():
+        log.info('terminate: decode')
+        processes.decode.terminate()
+    for n, p in enumerate(processes.engine):
+        if p is not None and p.is_alive():
+            log.info(f'terminate: process={n+1}')
+            p.terminate()
+
+def sigint_handler(_signum, _frame): # required for process cleanup
+    log.info('sigint')
+    terminate()
+    time.sleep(0.1)
+    sys.exit(0)
+
+
+def init():
     import torch
     import torch.multiprocessing as mp
     mp.set_start_method('spawn')
@@ -131,52 +148,37 @@ if __name__ == "__main__":
     setup_context(ctx)
     log.info(f'options: {options.get()}')
 
-    # validate input
-    import media
-    video, width, height, num_frames = media.get_video(args.input)
-    if video is None or width ==0 or height == 0 or num_frames == 0:
-        sys.exit(1)
-    else:
-        options.width = 8 * options.scale * width // 8
-        options.height = 8 * options.scale * height // 8
-
     # start processes: encode/process/decode
-    import taesd
     import pipeline
     if options.vae:
-        log.info('vae: full')
-        for i in range(options.pipelines):
-            pipe = mp.Process(target=pipeline.process, args=(queue.process, queue.result, times.process, times.load, frames.process, options), daemon=True) # 0 - combo pipeline
+        import vae
+        log.info('vae: multiprocess')
+        processes.encode = mp.Process(target=vae.encoder, args=(queue.encode, queue.process, times.encode, frames.encode, options), daemon=True) # 1 - encode frames to latents
+        processes.decode = mp.Process(target=vae.decoder, args=(queue.decode, queue.result, times.decode, frames.decode, options), daemon=True) # 3 - decode latents to frames
+        processes.encode.start()
+        processes.decode.start()
+        for _i in range(options.pipelines):
+            pipe = mp.Process(target=pipeline.process, args=(queue.process, queue.decode, times.process, times.load, frames.process, options), daemon=True) # 0 - combo pipeline
             pipe.start()
             processes.engine.append(pipe)
-    else:
-        log.info('vae: taesd multiprocess')
+    elif options.taesd:
+        import taesd
+        log.info('vae: multiprocess taesd')
         processes.encode = mp.Process(target=taesd.encoder, args=(queue.encode, queue.process, times.encode, frames.encode, options), daemon=True) # 1 - encode frames to latents
         processes.decode = mp.Process(target=taesd.decoder, args=(queue.decode, queue.result, times.decode, frames.decode, options), daemon=True) # 3 - decode latents to frames
         processes.encode.start()
         processes.decode.start()
-        for i in range(options.pipelines):
+        for _i in range(options.pipelines):
             pipe = mp.Process(target=pipeline.process, args=(queue.process, queue.decode, times.process, times.load, frames.process, options), daemon=True) # 0 - combo pipeline
             pipe.start()
             processes.engine.append(pipe)
+    else:
+        log.info('vae: monolithic')
+        for _i in range(options.pipelines):
+            pipe = mp.Process(target=pipeline.process, args=(queue.process, queue.result, times.process, times.load, frames.process, options), daemon=True) # 0 - combo pipeline
+            pipe.start()
+            processes.engine.append(pipe)
 
-    def terminate():
-        if processes.encode is not None and processes.encode.is_alive():
-            log.info('terminate: encode')
-            processes.encode.terminate()
-        if processes.decode is not None and processes.decode.is_alive():
-            log.info('terminate: decode')
-            processes.decode.terminate()
-        for n, p in enumerate(processes.engine):
-            if p is not None and p.is_alive():
-                log.info(f'terminate: process={n+1}')
-                p.terminate()
-
-    def sigint_handler(_signum, _frame): # required for process cleanup
-        log.info('sigint')
-        terminate()
-        time.sleep(0.1)
-        sys.exit(0)
 
     import signal
     signal.signal(signal.SIGINT, sigint_handler)
@@ -185,6 +187,18 @@ if __name__ == "__main__":
     while times.load.value == 0:
         time.sleep(0.1)
     log.info('ready...')
+
+
+if __name__ == "__main__":
+    # init
+    parse_args()
+    init()
+
+    # validate input
+    import media
+    video, width, height, num_frames = media.get_video(args.input)
+    if video is None or width ==0 or height == 0 or num_frames == 0:
+        sys.exit(1)
 
     # start read/save threads
     get_stats()

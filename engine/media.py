@@ -36,15 +36,16 @@ def read_frames(cv2_video, queue, times):
         if n % (options.skip + 1) == 0:
             log.debug(f'enqueue: frame={n}')
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (0, 0), fx = options.scale, fy = options.scale)
-            if options.vae:
+            h, w, _c = frame.shape
+            frame = cv2.resize(frame, (int(8 * options.scale * w // 8), int(8 * options.scale * h // 8)))
+            if options.vae is not None or options.taesd:
+                queue.encode.put((frame.copy()))
+            else:
                 image = Image.fromarray(frame)
                 batch.append(image)
                 if len(batch) == options.batch:
                     queue.process.put(batch.copy())
                     batch.clear()
-            else:
-                queue.encode.put((frame.copy()))
         n += 1
         status, frame = cv2_video.read()
     times.read = time.time() - t0

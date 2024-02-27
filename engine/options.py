@@ -18,16 +18,17 @@ class Options():
         self._prompt = 'sexy girl dancing'
         self._negative = ''
         self._seed = 424242
-        self.width: int = 512
-        self.height: int = 512
+        self.width: int = 512 # unused
+        self.height: int = 512 # unused
         self.steps: int = 5
         self.strength: float = 0.2
         self.cfg: float = 4.0
 
         # optimizations
-        self.vae = False
+        self.vae = None
+        self.taesd = False
         self.device: str = 'cuda'
-        self.dtype = torch.bfloat16
+        self.dtype = torch.float16
         self.pipelines: int = 1 # number of processing instances to start
         self.batch: int = 1 # number of items to hold per buffer and process in parallel
         self.channels_last = True # use cuddn channels last

@@ -79,7 +79,7 @@ def process(in_queue, out_queue, elapsed, load_time, frames, options):
             'guidance_scale': options.cfg,
             'generator': torch.Generator(options.device).manual_seed(options.seed),
         }
-        sd_dict['output_type'] = 'pil' if options.vae else 'latent'
+        sd_dict['output_type'] = 'pil' if options.vae is None and not options.taesd else 'latent'
         try:
             res = pipe(**sd_dict)
             process_calls += 1
