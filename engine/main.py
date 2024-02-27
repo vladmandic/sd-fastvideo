@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
 from types import SimpleNamespace
-import os
 import sys
 import time
 import argparse
-import cv2
 import nvml
 from logger import log
 from options import options
@@ -53,6 +51,9 @@ def parse_args():
     options.scale = args.scale
     options.cfg = args.cfg
     options.steps = args.steps
+    options.skip = args.skip
+    options.input = args.input
+    options.output = args.output
     options.stablefast = args.stablefast
     options.deepcache = args.deepcache
     options.inductor = args.inductor
@@ -90,80 +91,6 @@ def get_stats():
     log.info(stats)
 
 
-def get_video(fn: str):
-    try:
-        stream = cv2.VideoCapture(fn)
-        if not stream.isOpened():
-            log.error(f'video open failed: path={fn}')
-            return None, 0, 0, 0
-        total_frames = int(stream.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = int(stream.get(cv2.CAP_PROP_FPS))
-        w, h = int(stream.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        cc = stream.get(cv2.CAP_PROP_FOURCC)
-        cc_bytes = int(cc).to_bytes(4, byteorder=sys.byteorder) # convert code to a bytearray
-        codec = cc_bytes.decode() # decode byteaarray to a string
-        log.info(f'input video: path={fn} frames={total_frames} fps={fps} size={w}x{h} codec={codec}')
-        return stream, w, h, total_frames
-    except Exception as e:
-        log.error(f'video open failed: path={fn} {e}')
-        return None, 0, 0, 0
-
-
-def read_frames(cv2_video):
-    from PIL import Image
-    log.info('thread start: read')
-    status, frame = cv2_video.read() # first frame
-    n = 0
-    t0 = time.time()
-    batch = []
-    while status:
-        if n % (args.skip + 1) == 0:
-            log.debug(f'enqueue: frame={n}')
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (0, 0), fx = args.scale, fy = args.scale)
-            if options.vae:
-                image = Image.fromarray(frame)
-                batch.append(image)
-                if len(batch) == options.batch:
-                    queue.process.put(batch.copy())
-                    batch.clear()
-            else:
-                queue.encode.put((frame.copy()))
-        n += 1
-        status, frame = cv2_video.read()
-    times.read = time.time() - t0
-    log.info(f'thread done: read time={times.read:.3f}')
-
-
-def save_frames():
-    from PIL import Image
-    log.info('thread start: save')
-    n = 0
-    if args.output is not None:
-        if not os.path.exists(args.output):
-            os.makedirs(args.output, exist_ok=True)
-        basename = os.path.splitext(os.path.basename(args.input))[0]
-        basename = os.path.join(args.output, basename)
-        log.info(f'save: fn={basename}{0:05d}.jpg')
-    else:
-        log.info(f'save: location={args.output}')
-    while True:
-        frame = queue.result.get()
-        if not args.output:
-            continue # just empty the queue
-        try:
-            t0 = time.time()
-            n += 1
-            fn = f'{basename}{n:05d}.jpg'
-            if isinstance(frame, Image.Image):
-                frame.save(fn)
-            else:
-                cv2.imwrite(fn, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-            log.debug(f'save: frame={n} fn={fn}')
-            times.save = time.time() - t0
-            frames.save += 1
-        except Exception as e:
-            log.error(f'save: frame={frame} {e}')
 
 
 def setup_context(context):
@@ -199,18 +126,19 @@ if __name__ == "__main__":
     for gpu in nvml.get():
         log.info(f'gpu: {gpu}')
 
+    # shared context and queues
+    ctx = mp.get_context('spawn')
+    setup_context(ctx)
+    log.info(f'options: {options.get()}')
+
     # validate input
-    video, width, height, num_frames = get_video(args.input)
+    import media
+    video, width, height, num_frames = media.get_video(args.input)
     if video is None or width ==0 or height == 0 or num_frames == 0:
         sys.exit(1)
     else:
         options.width = 8 * options.scale * width // 8
         options.height = 8 * options.scale * height // 8
-
-    # shared context and queues
-    ctx = mp.get_context('spawn')
-    setup_context(ctx)
-    log.info(f'options: {options.get()}')
 
     # start processes: encode/process/decode
     import taesd
@@ -262,8 +190,8 @@ if __name__ == "__main__":
     get_stats()
     t_start = time.time()
     from threading import Thread
-    Thread(target=read_frames, args=(video,), daemon=True).start()
-    Thread(target=save_frames, args=(), daemon=True).start()
+    Thread(target=media.read_frames, args=(video, queue, times), daemon=True).start()
+    Thread(target=media.save_frames, args=(queue, times, frames), daemon=True).start()
     time.sleep(1)
 
     # start monitoring

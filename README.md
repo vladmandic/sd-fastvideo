@@ -1,4 +1,4 @@
-# Fast WebCam and Video processing using Stable Diffusion
+# Fast Video and WebCam processing using Stable Diffusion
 
 ## Highlights
 

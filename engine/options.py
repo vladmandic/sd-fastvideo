@@ -7,6 +7,11 @@ class Options():
         self.level = 'DEBUG'
         self.scale = 0.5
 
+        # media
+        self.input = None
+        self.output = None
+        self.skip = 0
+
         # generate defaults
         self.model = 'assets/photonLCM_v10.safetensors'
         self.sampler = 'lcm'
