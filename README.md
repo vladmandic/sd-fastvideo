@@ -94,15 +94,12 @@ For example, compile modes, torch dtype, etc.
 12:14:53-922218 INFO     done: time=14.455 frames=488 fps=33.761 its=168.804
 ```
 
-## Web client
+## TODO
 
-*TODO*
-
-Communication:
-
-- All communication between browser and backend is done using raw websockets in real-time
-- Client maintains constant frame rate based on forward-adjusted server latency
-
-## Issues
-
-- VAE decode in separate process can cause decode corruption
+- Web client
+  - All communication between browser and backend is done using raw websockets in real-time
+  - Client maintains constant frame rate based on forward-adjusted server latency
+- IPAdapter
+- ControlNet
+- Video output
+- LoRA

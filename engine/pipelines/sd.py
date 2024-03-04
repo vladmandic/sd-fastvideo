@@ -1,28 +1,27 @@
 # StableDiffusionImg2ImgPipeline
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional
+import inspect
 import torch
-from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer, CLIPVisionModelWithProjection
-from diffusers.image_processor import PipelineImageInput, VaeImageProcessor
-from diffusers.loaders import FromSingleFileMixin, IPAdapterMixin, LoraLoaderMixin, TextualInversionLoaderMixin
-from diffusers.models import AutoencoderKL, ImageProjection, UNet2DConditionModel
+import transformers
+from diffusers.loaders import FromSingleFileMixin, IPAdapterMixin, LoraLoaderMixin
+from diffusers.models import ImageProjection, UNet2DConditionModel
 from diffusers.schedulers import KarrasDiffusionSchedulers
-from diffusers.utils import scale_lora_layers, unscale_lora_layers
-from diffusers.utils.torch_utils import randn_tensor
+# from diffusers.utils import scale_lora_layers, unscale_lora_layers
+# from diffusers.utils.torch_utils import randn_tensor
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline, StableDiffusionMixin
+import diffusers.utils
 
-
-class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, TextualInversionLoaderMixin, IPAdapterMixin, LoraLoaderMixin, FromSingleFileMixin):
+class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, IPAdapterMixin, LoraLoaderMixin, FromSingleFileMixin):
     def __init__(
         self,
-        vae: AutoencoderKL,
-        text_encoder: CLIPTextModel,
-        tokenizer: CLIPTokenizer,
+        vae: None,
+        text_encoder: transformers.CLIPTextModel,
+        tokenizer: transformers.CLIPTokenizer,
         unet: UNet2DConditionModel,
         scheduler: KarrasDiffusionSchedulers,
-        feature_extractor: CLIPImageProcessor,
-        image_encoder: CLIPVisionModelWithProjection = None,
-        requires_safety_checker: bool = True,
+        feature_extractor: transformers.CLIPImageProcessor,
+        image_encoder: transformers.CLIPVisionModelWithProjection = None,
     ):
         super().__init__()
         self.register_modules(
@@ -34,9 +33,6 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
             feature_extractor=feature_extractor,
             image_encoder=image_encoder,
         )
-        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
-        self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
-        self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def encode_prompt(
         self,
@@ -50,7 +46,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
     ):
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
-            scale_lora_layers(self.text_encoder, lora_scale)
+            diffusers.utils.scale_lora_layers(self.text_encoder, lora_scale)
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -58,8 +54,6 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
-            if isinstance(self, TextualInversionLoaderMixin):
-                prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
                 prompt,
                 padding="max_length",
@@ -85,8 +79,6 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
                 uncond_tokens = [negative_prompt]
             else:
                 uncond_tokens = negative_prompt
-            if isinstance(self, TextualInversionLoaderMixin):
-                uncond_tokens = self.maybe_convert_prompt(uncond_tokens, self.tokenizer)
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
                 uncond_tokens,
@@ -104,7 +96,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
         if do_classifier_free_guidance:
             negative_prompt_embeds = negative_prompt_embeds.to(dtype=prompt_embeds_dtype, device=device)
         if isinstance(self, LoraLoaderMixin):
-            unscale_lora_layers(self.text_encoder, lora_scale)
+            diffusers.utils.unscale_lora_layers(self.text_encoder, lora_scale)
         return prompt_embeds, negative_prompt_embeds
 
     def encode_image(self, image, device, num_images_per_prompt, output_hidden_states=None):
@@ -155,7 +147,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
         self,
         scheduler,
         num_inference_steps: Optional[int] = None,
-        device: Optional[Union[str, torch.device]] = None,
+        device: Optional[torch.device] = None,
         timesteps: Optional[List[int]] = None,
         **kwargs,
     ):
@@ -179,7 +171,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
     def prepare_latents(self, image, timestep, dtype, device, generator=None, noise=None):
         init_latents = torch.cat([image.to(device=device, dtype=dtype)], dim=0)
         if noise is None:
-            noise = randn_tensor(init_latents.shape, generator=generator, device=device, dtype=dtype)
+            noise = diffusers.utils.torch_utils.randn_tensor(init_latents.shape, generator=generator, device=device, dtype=dtype)
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
         return init_latents
 
@@ -202,18 +194,18 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
     @torch.no_grad()
     def __call__(
         self,
-        image: PipelineImageInput = None,
+        image: torch.FloatTensor = None,
         strength: float = 0.8,
         num_inference_steps: Optional[int] = 50,
         timesteps: List[int] = None,
         guidance_scale: Optional[float] = 7.5,
-        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+        generator: Optional[torch.Generator] = None,
         prompt_embeds: Optional[torch.FloatTensor] = None,
         negative_prompt_embeds: Optional[torch.FloatTensor] = None,
         noise: Optional[torch.FloatTensor] = None,
-        ip_adapter_image: Optional[PipelineImageInput] = None,
+        ip_adapter_image: Optional[torch.FloatTensor] = None,
         ip_adapter_image_embeds: Optional[List[torch.FloatTensor]] = None,
-        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        cross_attention_kwargs: Optional[Dict] = None,
         **kwargs,
     ):
         self.guidance_scale = guidance_scale
@@ -242,15 +234,14 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
         latent_timestep = timesteps[:1].repeat(batch_size)
 
         # Add noise
+        extra_step_kwargs = { 'generator': generator } if "generator" in set(inspect.signature(self.scheduler.step).parameters.keys()) else {}
         latents = self.prepare_latents(image=image, timestep=latent_timestep, dtype=prompt_embeds.dtype, device=device, generator=generator, noise=noise)
 
         # Optionally get Guidance Scale Embedding
         timestep_cond = None
         if self.unet.config.time_cond_proj_dim is not None:
             guidance_scale_tensor = torch.tensor(self.guidance_scale - 1).repeat(batch_size)
-            timestep_cond = self.get_guidance_scale_embedding(
-                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
-            ).to(device=device, dtype=latents.dtype)
+            timestep_cond = self.get_guidance_scale_embedding(guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim).to(device=device, dtype=latents.dtype)
 
         # Denoising loop
         for _i, timestep in enumerate(timesteps):
@@ -268,5 +259,5 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, StableDiffusionMixin, Te
             if self.do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-            latents = self.scheduler.step(noise_pred, timestep, latents, generator=generator, return_dict=False)[0]
+            latents = self.scheduler.step(noise_pred, timestep, latents, **extra_step_kwargs, return_dict=False)[0]
         return latents
