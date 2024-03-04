@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument('--scale', type=float, default=1.0, help="rescale factor")
     parser.add_argument('--strength', type=float, default=0.5, help="denoise strength")
     parser.add_argument('--cfg', type=float, default=6.0, help="classifier free guidance")
+    parser.add_argument('--rescale', type=float, default=1.0, help="vae rescale")
     parser.add_argument('--vae', type=str, required=False, help="vae file")
     parser.add_argument("--taesd", action="store_true", help="use taesd vae")
     parser.add_argument("--debug", action="store_true", help="debug logging")
@@ -54,6 +55,7 @@ def parse_args():
     options.cfg = args.cfg
     options.steps = args.steps
     options.skip = args.skip
+    options.rescale = args.rescale
     options.input = args.input
     options.output = args.output
     options.stablefast = args.stablefast

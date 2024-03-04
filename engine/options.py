@@ -15,14 +15,15 @@ class Options():
         # generate defaults
         self.model = 'assets/photonLCM_v10.safetensors'
         self.sampler = 'lcm'
-        self._prompt = 'sexy girl dancing'
-        self._negative = ''
-        self._seed = 424242
+        self._prompt = 'color sketch of a beautiful, sexy young girl with blonde hair performing yoga, naked, nsfw, perfect face, rich colors, cinestil, outdoors'
+        self._negative = 'clothes, shirt, pants, ugly, deformed, mutilated'
+        self._seed = -1
         self.width: int = 512 # unused
         self.height: int = 512 # unused
         self.steps: int = 5
-        self.strength: float = 0.2
+        self.strength: float = 0.5
         self.cfg: float = 4.0
+        self.rescale: float = 1.0
 
         # optimizations
         self.vae = None
@@ -40,21 +41,14 @@ class Options():
         # internal
         self.prompt_embeds = None
         self.negative_embeds = None
+        self.noise = None
+        self.vae_scaling_factor = 0.18215
         self.load_config = {
             "low_cpu_mem_usage": True,
             "torch_dtype": self.dtype,
-            "safety_checker": None,
-            "requires_safety_checker": False,
-            "load_safety_checker": False,
-            "load_connected_pipeline": True,
             "use_safetensors": True,
             'extract_ema': True,
-            'config_files': {
-                'v1': 'configs/v1-inference.yaml',
-                'v2': 'configs/v2-inference-768-v.yaml',
-                'xl': 'configs/sd_xl_base.yaml',
-                'xl_refiner': 'configs/sd_xl_refiner.yaml',
-            }
+            'original_config_file': 'configs/v1-inference.yaml',
         }
         self.scheduler_config = {
             'num_train_timesteps': 1000,
@@ -87,6 +81,7 @@ class Options():
             "steps": self.steps,
             "strength": self.strength,
             "cfg": self.cfg,
+            "rescale": self.rescale,
             "batch": self.batch,
             "device": self.device,
             "dtype": str(self.dtype),

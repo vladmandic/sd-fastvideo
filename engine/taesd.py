@@ -96,20 +96,25 @@ def decoder(in_queue, out_queue, elapsed, frames, options): # batch decodes proc
         if len(batch) == options.batch:
             t0 = time.time()
             latents = torch.stack(batch).to(options.device, options.dtype)
-            # if abs(latents.amax()) + abs(latents.amin()) <= 0:
-            #    continue # empty image
-            with torch.no_grad():
-                decoded = vae.decoder(latents)
-            decoded = 255.0 * decoded
-            tensors = torch.split(decoded, 1, dim=0)
-            images = [t.squeeze(0).permute(1, 2, 0).detach().cpu() for t in tensors]
-            images = [t.to(torch.float32).numpy().astype(np.uint8) for t in images] # np doesnt support bfloat16
-            decoder_calls += 1
-            frames.value += len(images)
-            for image in images:
-                out_queue.put((image))
-            elapsed.value += time.time() - t0
-            log.debug(f'decode  i={decoder_calls} in={len(latents)} out={len(images)} input={latents.amin():.3f}/{latents.amax():.3f} output={decoded.amin():.3f}/{decoded.amax():.3f} time={time.time() - t0}')
+            amin0, amax0 = latents.amin(), latents.amax()
+            size = amax0 - amin0
+            if size > 1:
+                with torch.no_grad():
+                    decoded = vae.decoder(latents * options.rescale)
+                amin1, amax1 = decoded.amin(), decoded.amax()
+                decoded = 255.0 * torch.clamp(decoded, 0, 1)
+                tensors = torch.split(decoded, 1, dim=0)
+                images = [t.squeeze(0).permute(1, 2, 0).detach().float().cpu() for t in tensors]
+                images = [t.numpy().astype(np.uint8) for t in images] # np doesnt support bfloat16
+                decoder_calls += 1
+                frames.value += len(images)
+                for image in images:
+                    out_queue.put((image))
+                t = time.time() - t0
+                elapsed.value += t
+                log.debug(f'decode  i={decoder_calls} in={len(latents)} out={len(images)} input={amin0:.3f}/{amax0:.3f} output={amin1:.3f}/{amax1:.3f} range={size:.3f} time={t:.3f}')
+            else:
+                log.debug(f'decode  i={decoder_calls} in={len(latents)} input={amin0:.3f}/{amax0:.3f} range={size:.3f} skip')
             batch.clear()
 
 
@@ -127,11 +132,17 @@ def encoder(in_queue, out_queue, elapsed, frames, options): # batch encodes imag
             tensors = [TF.to_tensor(i) for i in images]
             batch = torch.stack(tensors).to(options.device, options.dtype)
             with torch.no_grad():
-                latents = vae.encoder(batch)
-            latents = latents.detach().clone()
+                latents = vae.encoder(batch) * options.rescale
+            amin, amax = latents.amin(), latents.amax()
+            size = amax - amin
+            latents = latents.detach().float().cpu()
             encoder_calls += 1
             frames.value += len(images)
-            out_queue.put((latents))
             elapsed.value += time.time() - t0
-            log.debug(f'encode  i={encoder_calls} in={len(images)} output={latents.amin():.3f}/{latents.amax():.3f} out={len(latents)} time={time.time() - t0}')
+            t = time.time() - t0
+            if size > 1:
+                out_queue.put((latents))
+                log.debug(f'encode  i={encoder_calls} in={len(images)} output={amin:.3f}/{amax:.3f} out={len(latents)} range={size:.3f} time={t:.3f}')
+            else:
+                log.debug(f'encode  i={encoder_calls} in={len(images)} output={amin:.3f}/{amax:.3f} out={len(latents)} range={size:.3f} skip')
             images.clear()

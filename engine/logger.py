@@ -9,6 +9,14 @@ from rich.console import Console
 from rich.pretty import install as pretty_install
 from rich.traceback import install as traceback_install
 
+
+console = Console(log_time=True, log_time_format='%H:%M:%S-%f', theme=Theme({
+    "traceback.border": "black",
+    "traceback.border.syntax_error": "black",
+    "inspect.value.border": "black",
+}))
+
+
 def setup_logging():
     logging.getLogger("urllib3").setLevel(logging.ERROR)
     logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -16,11 +24,6 @@ def setup_logging():
     logging.getLogger("torch").setLevel(logging.ERROR)
     logging.basicConfig(level=logging.ERROR, format='%(asctime)s | %(name)s | %(levelname)s | %(module)s | %(message)s', handlers=[logging.NullHandler()]) # redirect default logger to null
     warnings.filterwarnings(action="ignore")
-    console = Console(log_time=True, log_time_format='%H:%M:%S-%f', theme=Theme({
-        "traceback.border": "black",
-        "traceback.border.syntax_error": "black",
-        "inspect.value.border": "black",
-    }))
 
     def excepthook(exc_type, exc_value, exc_traceback):
         if issubclass(exc_type, KeyboardInterrupt):
@@ -43,5 +46,6 @@ def setup_logging():
 
     sys.excepthook = excepthook
     return log_instance
+
 
 log = setup_logging()
